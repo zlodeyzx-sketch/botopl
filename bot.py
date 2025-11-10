@@ -1,5 +1,5 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import Application, MessageHandler, filters, CallbackQueryHandler
 import os
 import logging
 
@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv('TOKEN')
 
-def handle_first_action(update: Update, context):
+async def handle_first_action(update: Update, context):
     user = update.effective_user
     
     with open("users.txt", "a", encoding="utf-8") as f:
@@ -29,15 +29,15 @@ def handle_first_action(update: Update, context):
         [InlineKeyboardButton("🔄 СТАРТ", callback_data="start")]
     ]
     
-    update.message.reply_text(
+    await update.message.reply_text(
         instruction_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='HTML'
     )
 
-def handle_start_button(update: Update, context):
+async def handle_start_button(update: Update, context):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     instruction_text = """💳 <b>Инструкция по оплате</b>
 
@@ -55,18 +55,20 @@ def handle_start_button(update: Update, context):
         [InlineKeyboardButton("🔄 СТАРТ", callback_data="start")]
     ]
     
-    query.edit_message_text(
+    await query.edit_message_text(
         instruction_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode='HTML'
     )
 
 if __name__ == "__main__":
-    updater = Updater(TOKEN, use_context=True)
+    application = Application.builder().token(TOKEN).build()
     
-    updater.dispatcher.add_handler(MessageHandler(Filters.all, handle_first_action))
-    updater.dispatcher.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start$"))
+    application.add_handler(MessageHandler(filters.ALL, handle_first_action))
+    application.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start$"))
     
     print("Платежный бот запущен...")
-    updater.start_polling()
-    updater.idle()
+    application.run_polling(
+        poll_interval=1,
+        drop_pending_updates=True
+    )
