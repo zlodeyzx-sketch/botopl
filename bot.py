@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import base64
 from http.client import HTTPSConnection
 from urllib.parse import urlencode
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -19,41 +18,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get('PORT', 10000))
-    server = HTTPSServer(('0.0.0.0', port), HealthHandler)
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
     print(f"Health server running on port {port}")
     server.serve_forever()
-
-def send_photo_with_buttons(chat_id, photo_url, caption, keyboard):
-    """Отправляет фото с текстом и кнопками"""
-    # Сначала отправляем фото
-    data = {
-        "chat_id": chat_id,
-        "photo": photo_url,
-        "caption": caption,
-        "parse_mode": "HTML"
-    }
-    
-    conn = HTTPSConnection(BASE_URL)
-    conn.request("POST", f"/bot{TOKEN}/sendPhoto", urlencode(data), {
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    response = conn.getresponse()
-    photo_response = response.read()
-    
-    # Затем отправляем кнопки
-    buttons_data = {
-        "chat_id": chat_id,
-        "text": " ",
-        "reply_markup": json.dumps(keyboard)
-    }
-    
-    conn = HTTPSConnection(BASE_URL)
-    conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(buttons_data), {
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    buttons_response = conn.getresponse()
-    
-    return photo_response, buttons_response.read()
 
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
@@ -82,8 +49,21 @@ def send_instruction(chat_id):
     photo_url = "https://github.com/zlodeyzx-sketch/botopl/blob/main/instruction_image.jpg?raw=true"
     
     try:
-        # Отправляем фото с текстом и кнопками
-        send_photo_with_buttons(chat_id, photo_url, instruction_text, keyboard)
+        # Пытаемся отправить фото с кнопками
+        data = {
+            "chat_id": chat_id,
+            "photo": photo_url,
+            "caption": instruction_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard)
+        }
+        
+        conn = HTTPSConnection(BASE_URL)
+        conn.request("POST", f"/bot{TOKEN}/sendPhoto", urlencode(data), {
+            "Content-Type": "application/x-www-form-urlencoded"
+        })
+        response = conn.getresponse()
+        return response.read()
         
     except Exception as e:
         print(f"Ошибка отправки фото: {e}")
