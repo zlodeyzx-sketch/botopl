@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import base64
 from http.client import HTTPSConnection
 from urllib.parse import urlencode
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -22,6 +23,22 @@ def run_health_server():
     print(f"Health server running on port {port}")
     server.serve_forever()
 
+def send_photo_with_caption(chat_id, photo_url, caption):
+    """Отправляет фото с текстом"""
+    data = {
+        "chat_id": chat_id,
+        "photo": photo_url,
+        "caption": caption,
+        "parse_mode": "HTML"
+    }
+    
+    conn = HTTPSConnection(BASE_URL)
+    conn.request("POST", f"/bot{TOKEN}/sendPhoto", urlencode(data), {
+        "Content-Type": "application/x-www-form-urlencoded"
+    })
+    response = conn.getresponse()
+    return response.read()
+
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
 
@@ -40,19 +57,40 @@ def send_instruction(chat_id):
         ]]
     }
 
-    data = {
-        "chat_id": chat_id,
-        "text": instruction_text,
-        "parse_mode": "HTML",
-        "reply_markup": json.dumps(keyboard)
-    }
-
-    conn = HTTPSConnection(BASE_URL)
-    conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(data), {
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    response = conn.getresponse()
-    return response.read()
+    # Используем твою ссылку на картинку
+    photo_url = "https://github.com/zlodeyzx-sketch/botopl/blob/main/instruction_image.jpg?raw=true"
+    
+    try:
+        # Пытаемся отправить фото с текстом
+        send_photo_with_caption(chat_id, photo_url, instruction_text)
+        
+        # Отправляем кнопки отдельным сообщением
+        data = {
+            "chat_id": chat_id,
+            "text": " ",
+            "reply_markup": json.dumps(keyboard)
+        }
+        conn = HTTPSConnection(BASE_URL)
+        conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(data), {
+            "Content-Type": "application/x-www-form-urlencoded"
+        })
+        conn.getresponse().read()
+        
+    except Exception as e:
+        print(f"Ошибка отправки фото: {e}")
+        # Если фото не отправилось, отправляем только текст с кнопкой
+        data = {
+            "chat_id": chat_id,
+            "text": instruction_text,
+            "parse_mode": "HTML",
+            "reply_markup": json.dumps(keyboard)
+        }
+        conn = HTTPSConnection(BASE_URL)
+        conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(data), {
+            "Content-Type": "application/x-www-form-urlencoded"
+        })
+        response = conn.getresponse()
+        return response.read()
 
 def get_updates(offset=None):
     conn = HTTPSConnection(BASE_URL)
@@ -88,9 +126,7 @@ def bot_polling():
 
 if __name__ == "__main__":
     import threading
-    # Запускаем health server в отдельном потоке
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
     
-    # Запускаем бота в основном потоке
     bot_polling()
