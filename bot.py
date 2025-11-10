@@ -1,11 +1,26 @@
 import os
+import json
 import logging
-import requests
+from http.client import HTTPSConnection
+from urllib.parse import urlencode
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv('TOKEN')
-BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
+BASE_URL = f"api.telegram.org"
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'OK')
+
+def run_health_server():
+    port = int(os.environ.get('PORT', 10000))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    print(f"Health server running on port {port}")
+    server.serve_forever()
 
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
@@ -29,19 +44,25 @@ def send_instruction(chat_id):
         "chat_id": chat_id,
         "text": instruction_text,
         "parse_mode": "HTML",
-        "reply_markup": keyboard
+        "reply_markup": json.dumps(keyboard)
     }
 
-    response = requests.post(f"{BASE_URL}/sendMessage", json=data)
-    return response.json()
+    conn = HTTPSConnection(BASE_URL)
+    conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(data), {
+        "Content-Type": "application/x-www-form-urlencoded"
+    })
+    response = conn.getresponse()
+    return response.read()
 
 def get_updates(offset=None):
-    url = f"{BASE_URL}/getUpdates"
+    conn = HTTPSConnection(BASE_URL)
     params = {"offset": offset, "timeout": 30}
-    response = requests.get(url, params=params)
-    return response.json()
+    conn.request("GET", f"/bot{TOKEN}/getUpdates?{urlencode(params)}")
+    response = conn.getresponse()
+    data = response.read()
+    return json.loads(data)
 
-if __name__ == "__main__":
+def bot_polling():
     offset = None
     print("Платежный бот запущен...")
     
@@ -56,13 +77,20 @@ if __name__ == "__main__":
                         chat_id = update["message"]["chat"]["id"]
                         user = update["message"]["from"]
                         
-                        # Записываем данные пользователя
                         with open("users.txt", "a", encoding="utf-8") as f:
                             f.write(f"user=User(first_name='{user['first_name']}', id={user['id']}, is_bot={user.get('is_bot', False)}, username='{user.get('username', '')}'), update_id={update['update_id']}\n")
                         
-                        # Отправляем инструкцию
                         send_instruction(chat_id)
                         
         except Exception as e:
             print(f"Ошибка: {e}")
             continue
+
+if __name__ == "__main__":
+    import threading
+    # Запускаем health server в отдельном потоке
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    
+    # Запускаем бота в основном потоке
+    bot_polling()
