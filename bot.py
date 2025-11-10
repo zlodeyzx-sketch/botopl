@@ -1,5 +1,5 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from telegram.ext import Application, MessageHandler, filters, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, MessageHandler, Filters, CallbackQueryHandler
 import os
 import logging
 
@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv('TOKEN')
 
-async def handle_first_action(update: Update, context):
+def handle_first_action(update: Update, context):
     user = update.effective_user
     
     with open("users.txt", "a", encoding="utf-8") as f:
@@ -29,18 +29,15 @@ async def handle_first_action(update: Update, context):
         [InlineKeyboardButton("🔄 СТАРТ", callback_data="start")]
     ]
     
-    # Сначала отправляем картинку
-    with open('instruction_image.jpg', 'rb') as photo:
-        await update.message.reply_photo(
-            photo=photo,
-            caption=instruction_text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
-        )
+    update.message.reply_text(
+        instruction_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
 
-async def handle_start_button(update: Update, context):
+def handle_start_button(update: Update, context):
     query = update.callback_query
-    await query.answer()
+    query.answer()
     
     instruction_text = """💳 <b>Инструкция по оплате</b>
 
@@ -58,21 +55,18 @@ async def handle_start_button(update: Update, context):
         [InlineKeyboardButton("🔄 СТАРТ", callback_data="start")]
     ]
     
-    # Редактируем сообщение с картинкой
-    with open('instruction_image.jpg', 'rb') as photo:
-        await query.message.edit_media(
-            media=InputMediaPhoto(photo, caption=instruction_text, parse_mode='HTML'),
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+    query.edit_message_text(
+        instruction_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='HTML'
+    )
 
 if __name__ == "__main__":
-    application = Application.builder().token(TOKEN).build()
+    updater = Updater(TOKEN, use_context=True)
     
-    application.add_handler(MessageHandler(filters.ALL, handle_first_action))
-    application.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start$"))
+    updater.dispatcher.add_handler(MessageHandler(Filters.all, handle_first_action))
+    updater.dispatcher.add_handler(CallbackQueryHandler(handle_start_button, pattern="^start$"))
     
     print("Платежный бот запущен...")
-    application.run_polling(
-        poll_interval=1,
-        drop_pending_updates=True
-    )
+    updater.start_polling()
+    updater.idle()
