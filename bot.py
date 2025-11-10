@@ -19,12 +19,13 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 def run_health_server():
     port = int(os.environ.get('PORT', 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthHandler)
+    server = HTTPSServer(('0.0.0.0', port), HealthHandler)
     print(f"Health server running on port {port}")
     server.serve_forever()
 
-def send_photo_with_caption(chat_id, photo_url, caption):
-    """Отправляет фото с текстом"""
+def send_photo_with_buttons(chat_id, photo_url, caption, keyboard):
+    """Отправляет фото с текстом и кнопками"""
+    # Сначала отправляем фото
     data = {
         "chat_id": chat_id,
         "photo": photo_url,
@@ -37,7 +38,22 @@ def send_photo_with_caption(chat_id, photo_url, caption):
         "Content-Type": "application/x-www-form-urlencoded"
     })
     response = conn.getresponse()
-    return response.read()
+    photo_response = response.read()
+    
+    # Затем отправляем кнопки
+    buttons_data = {
+        "chat_id": chat_id,
+        "text": " ",
+        "reply_markup": json.dumps(keyboard)
+    }
+    
+    conn = HTTPSConnection(BASE_URL)
+    conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(buttons_data), {
+        "Content-Type": "application/x-www-form-urlencoded"
+    })
+    buttons_response = conn.getresponse()
+    
+    return photo_response, buttons_response.read()
 
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
@@ -52,33 +68,26 @@ def send_instruction(chat_id):
 Если возникли проблемы с оплатой - свяжитесь с поддержкой."""
 
     keyboard = {
-        "inline_keyboard": [[
-            {"text": "💳 ОПЛАТИТЬ", "url": "https://finance.ozon.ru/apps/sbp/ozonbankpay/019a06b4-7b6b-76a5-aa8f-21f02054522b"}
-        ]]
+        "inline_keyboard": [
+            [
+                {"text": "💳 ОПЛАТИТЬ", "url": "https://finance.ozon.ru/apps/sbp/ozonbankpay/019a06b4-7b6b-76a5-aa8f-21f02054522b"}
+            ],
+            [
+                {"text": "🔄 СТАРТ", "callback_data": "start"}
+            ]
+        ]
     }
 
     # Используем твою ссылку на картинку
     photo_url = "https://github.com/zlodeyzx-sketch/botopl/blob/main/instruction_image.jpg?raw=true"
     
     try:
-        # Пытаемся отправить фото с текстом
-        send_photo_with_caption(chat_id, photo_url, instruction_text)
-        
-        # Отправляем кнопки отдельным сообщением
-        data = {
-            "chat_id": chat_id,
-            "text": " ",
-            "reply_markup": json.dumps(keyboard)
-        }
-        conn = HTTPSConnection(BASE_URL)
-        conn.request("POST", f"/bot{TOKEN}/sendMessage", urlencode(data), {
-            "Content-Type": "application/x-www-form-urlencoded"
-        })
-        conn.getresponse().read()
+        # Отправляем фото с текстом и кнопками
+        send_photo_with_buttons(chat_id, photo_url, instruction_text, keyboard)
         
     except Exception as e:
         print(f"Ошибка отправки фото: {e}")
-        # Если фото не отправилось, отправляем только текст с кнопкой
+        # Если фото не отправилось, отправляем только текст с кнопками
         data = {
             "chat_id": chat_id,
             "text": instruction_text,
@@ -91,6 +100,25 @@ def send_instruction(chat_id):
         })
         response = conn.getresponse()
         return response.read()
+
+def handle_callback(update):
+    """Обработка нажатия кнопки СТАРТ"""
+    query = update["callback_query"]
+    chat_id = query["message"]["chat"]["id"]
+    
+    # Просто повторно отправляем инструкцию
+    send_instruction(chat_id)
+    
+    # Отвечаем на callback чтобы убрать часики
+    data = {
+        "callback_query_id": query["id"]
+    }
+    
+    conn = HTTPSConnection(BASE_URL)
+    conn.request("POST", f"/bot{TOKEN}/answerCallbackQuery", urlencode(data), {
+        "Content-Type": "application/x-www-form-urlencoded"
+    })
+    conn.getresponse().read()
 
 def get_updates(offset=None):
     conn = HTTPSConnection(BASE_URL)
@@ -119,6 +147,10 @@ def bot_polling():
                             f.write(f"user=User(first_name='{user['first_name']}', id={user['id']}, is_bot={user.get('is_bot', False)}, username='{user.get('username', '')}'), update_id={update['update_id']}\n")
                         
                         send_instruction(chat_id)
+                    
+                    # Обрабатываем нажатие кнопки СТАРТ
+                    elif "callback_query" in update:
+                        handle_callback(update)
                         
         except Exception as e:
             print(f"Ошибка: {e}")
