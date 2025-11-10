@@ -38,9 +38,6 @@ def send_instruction(chat_id):
         "inline_keyboard": [
             [
                 {"text": "💳 ОПЛАТИТЬ", "url": "https://finance.ozon.ru/apps/sbp/ozonbankpay/019a06b4-7b6b-76a5-aa8f-21f02054522b"}
-            ],
-            [
-                {"text": "🔄 СТАРТ", "callback_data": "start"}
             ]
         ]
     }
@@ -81,25 +78,6 @@ def send_instruction(chat_id):
         response = conn.getresponse()
         return response.read()
 
-def handle_callback(update):
-    """Обработка нажатия кнопки СТАРТ"""
-    query = update["callback_query"]
-    chat_id = query["message"]["chat"]["id"]
-    
-    # Просто повторно отправляем инструкцию
-    send_instruction(chat_id)
-    
-    # Отвечаем на callback чтобы убрать часики
-    data = {
-        "callback_query_id": query["id"]
-    }
-    
-    conn = HTTPSConnection(BASE_URL)
-    conn.request("POST", f"/bot{TOKEN}/answerCallbackQuery", urlencode(data), {
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    conn.getresponse().read()
-
 def get_updates(offset=None):
     conn = HTTPSConnection(BASE_URL)
     params = {"offset": offset, "timeout": 30}
@@ -127,10 +105,6 @@ def bot_polling():
                             f.write(f"user=User(first_name='{user['first_name']}', id={user['id']}, is_bot={user.get('is_bot', False)}, username='{user.get('username', '')}'), update_id={update['update_id']}\n")
                         
                         send_instruction(chat_id)
-                    
-                    # Обрабатываем нажатие кнопки СТАРТ
-                    elif "callback_query" in update:
-                        handle_callback(update)
                         
         except Exception as e:
             print(f"Ошибка: {e}")
