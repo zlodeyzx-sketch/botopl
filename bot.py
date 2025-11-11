@@ -78,6 +78,16 @@ def send_instruction(chat_id):
         response = conn.getresponse()
         return response.read()
 
+def handle_start_command(update):
+    """Обработка команды /start"""
+    chat_id = update["message"]["chat"]["id"]
+    user = update["message"]["from"]
+    
+    with open("users.txt", "a", encoding="utf-8") as f:
+        f.write(f"user=User(first_name='{user['first_name']}', id={user['id']}, is_bot={user.get('is_bot', False)}, username='{user.get('username', '')}'), update_id={update['update_id']}\n")
+    
+    send_instruction(chat_id)
+
 def get_updates(offset=None):
     conn = HTTPSConnection(BASE_URL)
     params = {"offset": offset, "timeout": 30}
@@ -98,6 +108,11 @@ def bot_polling():
                     offset = update["update_id"] + 1
                     
                     if "message" in update:
+                        # Обрабатываем команду /start
+                        if "text" in update["message"] and update["message"]["text"] == "/start":
+                            handle_start_command(update)
+                            continue
+                            
                         chat_id = update["message"]["chat"]["id"]
                         user = update["message"]["from"]
                         
