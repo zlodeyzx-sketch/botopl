@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import time
+import threading
 from http.client import HTTPSConnection
 from urllib.parse import urlencode
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -21,6 +23,24 @@ def run_health_server():
     server = HTTPServer(('0.0.0.0', port), HealthHandler)
     print(f"Health server running on port {port}")
     server.serve_forever()
+
+def keep_alive():
+    """Периодические запросы чтобы Render не усыплял бота"""
+    while True:
+        try:
+            # Делаем пустой запрос к API
+            conn = HTTPSConnection(BASE_URL)
+            conn.request("GET", f"/bot{TOKEN}/getMe")
+            response = conn.getresponse()
+            data = response.read()
+            result = json.loads(data)
+            if result.get("ok"):
+                print("🫀 Пульс - бот активен")
+            else:
+                print("❌ Пульс - ошибка бота")
+        except Exception as e:
+            print(f"❌ Пульс - ошибка: {e}")
+        time.sleep(300)  # Каждые 5 минут
 
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
@@ -127,6 +147,11 @@ def bot_polling():
 
 if __name__ == "__main__":
     import threading
+    
+    # Запускаем пульс в отдельном потоке
+    pulse_thread = threading.Thread(target=keep_alive, daemon=True)
+    pulse_thread.start()
+    
     health_thread = threading.Thread(target=run_health_server, daemon=True)
     health_thread.start()
     
