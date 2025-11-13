@@ -40,7 +40,7 @@ def keep_alive():
                 print("❌ Пульс - ошибка бота")
         except Exception as e:
             print(f"❌ Пульс - ошибка: {e}")
-        time.sleep(60)  # Каждые 2 минуты
+        time.sleep(30)  # Каждые 2 минуты
 
 def send_instruction(chat_id):
     instruction_text = """💳 <b>Инструкция по оплате</b>
